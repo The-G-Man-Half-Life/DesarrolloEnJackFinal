@@ -1,0 +1,14 @@
+class Main {
+
+    /** Program entry point.
+     *  Creates the Game, runs the main loop, and disposes everything on exit.
+     *  Returns: void. */
+    function void main() {
+        var Game game;
+
+        let game = Game.new();   // build board, player, hud and obstacle pool
+        do game.run();           // state machine + game loop until ESC
+        do game.dispose();       // free Game and everything it owns
+        return;
+    }
+}

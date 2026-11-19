@@ -1,0 +1,245 @@
+class Obstacle {
+    field int x;            // top-left x of bounding box
+    field int y;            // top-left y of bounding box (may be negative while entering)
+    field int width;        // bounding box width
+    field int height;       // bounding box height
+    field int lane;         // 0=left, 1=center, 2=right
+    field int type;         // 0=barrier, 1=train, 2=cone
+
+    field int fieldTop;     // top y of the play field (clip boundary)
+    field int fieldBottom;  // bottom y of the play field (clip boundary)
+    field boolean scored;   // true once this pass has been counted as dodged
+
+    /** Creates an obstacle in the given lane, at vertical position y, of the
+     *  given type, clipped to [clipTop, clipBottom].
+     *  Params: aLane=0..2, aY=top-left y, aType=0..2, clipTop/clipBottom=field bounds.
+     *  Returns: the new Obstacle. */
+    constructor Obstacle new(int aLane, int aY, int aType, int clipTop, int clipBottom) {
+        let fieldTop = clipTop;
+        let fieldBottom = clipBottom;
+        do configure(aLane, aY, aType);
+        return this;
+    }
+
+    /** Sets lane/position/type and the derived size + centered x. Shared by
+     *  the constructor, recycle() and reset() so no `new` is ever needed to
+     *  reposition an obstacle. Params: aLane, aY, aType. Returns: void. */
+    method void configure(int aLane, int aY, int aType) {
+        let lane = aLane;
+        let y = aY;
+        let type = aType;
+        let scored = false;
+
+        // Size per type (precomputed; no division at run time).
+        if (type = 1) {            // big train/block
+            let width = 48;
+            let height = 60;
+        } else {
+            if (type = 2) {        // cone
+                let width = 24;
+                let height = 26;
+            } else {               // barrier (type 0 and default)
+                let width = 56;
+                let height = 18;
+            }
+        }
+
+        // Center the sprite on its lane: x = laneCenter - width/2.
+        let x = laneCenter(aLane) - (width / 2);
+        return;
+    }
+
+    /** Returns the horizontal center (px) of a lane.
+     *  Precomputed constants. Params: laneIndex = 0..2. Returns: center x. */
+    method int laneCenter(int laneIndex) {
+        if (laneIndex = 0) { return 170; }
+        if (laneIndex = 2) { return 341; }
+        return 256;   // lane 1 (center) and default
+    }
+
+    /** Moves the obstacle DOWN by `speed` pixels: erase old, update y, draw
+     *  new. Clipping inside draw()/erase() keeps coordinates valid even when
+     *  the sprite is partially above or below the field.
+     *  Params: speed = pixels to advance per call (>0). Returns: void. */
+    method void update(int speed) {
+        do erase();
+        let y = y + speed;
+        do draw();
+        return;
+    }
+
+    /** Repositions the obstacle for a new pass: new lane, new top y (usually
+     *  above the field so it scrolls in) and new type. No allocation.
+     *  Params: newLane, newY, newType. Returns: void. */
+    method void recycle(int newLane, int newY, int newType) {
+        do erase();
+        do configure(newLane, newY, newType);
+        return;
+    }
+
+    /** Resets the obstacle to a fixed starting state (used on game restart).
+     *  Params: newLane, newY, newType. Returns: void. */
+    method void reset(int newLane, int newY, int newType) {
+        do configure(newLane, newY, newType);
+        return;
+    }
+
+    // ---- Clipped primitives: never call Screen with out-of-field coords ----
+
+    /** Clipped filled rectangle. Intersects [y1..y2] with the field vertical
+     *  bounds; skips the draw entirely if nothing is visible. x values are
+     *  always inside the field by construction.
+     *  Params: x1,y1,x2,y2 = rectangle corners (y1<=y2). Returns: void. */
+    method void cRect(int x1, int y1, int x2, int y2) {
+        if (y1 < fieldTop) { let y1 = fieldTop; }
+        if (y2 > fieldBottom) { let y2 = fieldBottom; }
+        if (~(y1 > y2)) {
+            do Screen.drawRectangle(x1, y1, x2, y2);
+        }
+        return;
+    }
+
+    /** Clipped line with clamped endpoints. Both endpoints' y are clamped
+     *  into the field; if the whole segment is outside, it is skipped.
+     *  Params: x1,y1,x2,y2 = segment endpoints. Returns: void. */
+    method void cLine(int x1, int y1, int x2, int y2) {
+        // If both endpoints are entirely above or entirely below, skip.
+        if ((y1 < fieldTop) & (y2 < fieldTop)) { return; }
+        if ((y1 > fieldBottom) & (y2 > fieldBottom)) { return; }
+        // Clamp each endpoint's y into the field (keeps coords valid).
+        if (y1 < fieldTop) { let y1 = fieldTop; }
+        if (y1 > fieldBottom) { let y1 = fieldBottom; }
+        if (y2 < fieldTop) { let y2 = fieldTop; }
+        if (y2 > fieldBottom) { let y2 = fieldBottom; }
+        do Screen.drawLine(x1, y1, x2, y2);
+        return;
+    }
+
+    /** Draws the obstacle sprite according to its type, in white, clipped to
+     *  the play field. Returns: void. */
+    method void draw() {
+        // Nothing to draw if completely outside the field.
+        if ((y > fieldBottom) | ((y + height) < fieldTop)) {
+            return;
+        }
+        do Screen.setColor(true);
+        if (type = 1) {
+            do drawTrain();
+        } else {
+            if (type = 2) {
+                do drawCone();
+            } else {
+                do drawBarrier();
+            }
+        }
+        return;
+    }
+
+    /** Type 0: low barrier - a short wide rectangle outline with diagonal
+     *  hazard stripes. All drawing goes through the clipped primitives.
+     *  Returns: void. */
+    method void drawBarrier() {
+        var int i;       // x offset of the current stripe foot
+        var int top;     // top x of the stripe (clamped to right edge)
+
+        // Outline of the barrier box.
+        do cLine(x, y, x + width, y);
+        do cLine(x, y + height, x + width, y + height);
+        do cLine(x, y, x, y + height);
+        do cLine(x + width, y, x + width, y + height);
+
+        // Diagonal hazard stripes every 8 px (short 45-deg segments).
+        let i = 0;
+        while (i < width) {
+            let top = x + i + height;
+            if (top > (x + width)) {
+                let top = x + width;
+            }
+            do cLine(x + i, y + height, top, y);
+            let i = i + 8;
+        }
+        return;
+    }
+
+    /** Type 1: big train/block - a filled body with black window cut-outs and
+     *  a bottom detail line, all clipped to the field. Returns: void. */
+    method void drawTrain() {
+        var int wy;   // window row y
+        var int wx;   // window column x
+
+        // Solid body.
+        do cRect(x, y, x + width, y + height);
+
+        // Windows: punch out black squares (two rows x three columns).
+        do Screen.setColor(false);
+        let wy = y + 8;
+        while (wy < (y + 40)) {
+            let wx = x + 6;
+            while (wx < (x + width - 6)) {
+                do cRect(wx, wy, wx + 8, wy + 8);
+                let wx = wx + 16;
+            }
+            let wy = wy + 20;
+        }
+
+        // Body detail line near the bottom (back to white).
+        do Screen.setColor(true);
+        do cLine(x, y + height - 8, x + width, y + height - 8);
+        return;
+    }
+
+    /** Type 2: cone - a triangle (lines) over a small base rectangle, with a
+     *  mid stripe, all clipped to the field. Returns: void. */
+    method void drawCone() {
+        var int apexX;
+        var int baseY;
+
+        let apexX = x + (width / 2);
+        let baseY = y + height - 4;
+
+        // Triangle sides.
+        do cLine(apexX, y, x + 2, baseY);
+        do cLine(apexX, y, x + width - 2, baseY);
+        do cLine(x + 2, baseY, x + width - 2, baseY);
+
+        // Base rectangle (the cone's foot).
+        do cRect(x, baseY, x + width, y + height);
+
+        // Mid stripe across the cone.
+        do cLine(x + 6, y + 14, x + width - 6, y + 14);
+        return;
+    }
+
+    /** Erases the obstacle by filling its bounding box with black, clipped to
+     *  the field. Decoupled from draw(). Returns: void. */
+    method void erase() {
+        do Screen.setColor(false);
+        do cRect(x, y, x + width, y + height);
+        do Screen.setColor(true);
+        return;
+    }
+
+    /** Getter: bounding-box top-left x. */
+    method int getX() { return x; }
+    /** Getter: bounding-box top-left y. */
+    method int getY() { return y; }
+    /** Getter: bounding-box width. */
+    method int getWidth() { return width; }
+    /** Getter: bounding-box height. */
+    method int getHeight() { return height; }
+    /** Getter: bottom y of the bounding box (y + height). */
+    method int getBottom() { return y + height; }
+    /** Getter: current lane index (0..2). */
+    method int getLane() { return lane; }
+    /** Getter: whether this pass has already been scored as dodged. */
+    method boolean isScored() { return scored; }
+    /** Marks this pass as scored so it is counted only once. Returns: void. */
+    method void markScored() { let scored = true; return; }
+
+    /** Releases the Obstacle. Owns no sub-objects, frees only itself.
+     *  Returns: void. */
+    method void dispose() {
+        do Memory.deAlloc(this);
+        return;
+    }
+}

@@ -1,0 +1,513 @@
+class Game {
+    // --- Owned objects ---
+    field Board board;              // scenery + HUD frames
+    field Player player;            // controllable character
+    field Hud hud;                  // dynamic score/lives/level text
+    field Array obstacles;          // fixed pool of Obstacle (recycled)
+    field int obstacleCount;        // number of obstacles in the pool
+
+    // --- Tunable constants (fields initialized in new(), easy to tweak) ---
+    field int WAIT_MS;              // ms to wait per loop (frame pacing)
+    field int WAIT_MIN;            // minimum wait (speed cap)
+    field int fieldTop;             // play field top y
+    field int fieldBottom;          // play field bottom y
+    field int spawnGap;             // min vertical gap between obstacles
+
+    // --- State machine ---
+    field int state;                // 0=START, 1=PLAYING, 2=GAMEOVER
+    field int ST_START;
+    field int ST_PLAYING;
+    field int ST_GAMEOVER;
+
+    // --- Key codes ---
+    field int K_LEFT;   // 130
+    field int K_RIGHT;  // 132
+    field int K_ESC;    // 140
+    field int K_SPACE;  // 32
+    field int K_ENTER;  // 128
+    field int K_R;      // 82
+    field int K_A;      // 65
+    field int K_D;      // 68
+
+    // --- Runtime state ---
+    field int score;                // points (dodged obstacles)
+    field int lives;                // remaining lives
+    field int level;                // current level (1..10)
+    field int speed;                // downward pixels per loop
+    field int prevKey;              // key held last loop (edge detection)
+    field int invuln;               // invulnerability countdown (loops)
+    field int blinkCtr;             // blink counter while invulnerable
+    field boolean playerShown;      // whether the player sprite is drawn
+    field boolean exit;             // true -> leave the main loop
+    field int seedCtr;              // increments on START to seed the Rng
+    field boolean won;              // true if the player reached level 10
+
+    /** Builds the whole game world ONCE: board, player, hud and the obstacle
+     *  pool. Initializes constants and resets the runtime state.
+     *  Returns: the new Game. */
+    constructor Game new() {
+        var int i;
+        var Obstacle o;
+
+        // Constants / layout.
+        let WAIT_MS = 40;
+        let WAIT_MIN = 16;
+        let fieldTop = 0;
+        let fieldBottom = 255;
+        let spawnGap = 70;          // vertical spacing so a lane stays open
+
+        let ST_START = 0;
+        let ST_PLAYING = 1;
+        let ST_GAMEOVER = 2;
+
+        let K_LEFT = 130;
+        let K_RIGHT = 132;
+        let K_ESC = 140;
+        let K_SPACE = 32;
+        let K_ENTER = 128;
+        let K_R = 82;
+        let K_A = 65;
+        let K_D = 68;
+
+        // Owned objects (allocated once).
+        let board = Board.new();
+        let player = Player.new(1);
+        let hud = Hud.new(0, 3, 1);
+
+        let obstacleCount = 4;
+        let obstacles = Array.new(obstacleCount);
+        let i = 0;
+        while (i < obstacleCount) {
+            // Initial off-screen positions (above the field), varied types.
+            let o = Obstacle.new(i - (3 * (i / 3)), 0 - (spawnGap * (i + 1)), i - (3 * (i / 3)), fieldTop, fieldBottom);
+            let obstacles[i] = o;
+            let i = i + 1;
+        }
+
+        let seedCtr = 1;        // explicit init (alloc does not zero memory)
+        do resetState();
+        let state = ST_START;
+        let exit = false;
+        return this;
+    }
+
+    /** Resets all runtime variables to their initial values WITHOUT allocating
+     *  anything. Repositions player and obstacles. Returns: void. */
+    method void resetState() {
+        var int i;
+        var Obstacle o;
+
+        let score = 0;
+        let lives = 3;
+        let level = 1;
+        let speed = 2;
+        let prevKey = 0;
+        let invuln = 0;
+        let blinkCtr = 0;
+        let playerShown = false;
+        let won = false;
+
+        do player.reset();
+
+        // Spread obstacles above the field, each in a lane, spaced by spawnGap.
+        let i = 0;
+        while (i < obstacleCount) {
+            let o = obstacles[i];
+            // lane = i mod 3 (manual modulo), start type = lane for variety.
+            do o.reset(i - (3 * (i / 3)), 0 - (spawnGap * (i + 1)), i - (3 * (i / 3)));
+            let i = i + 1;
+        }
+
+        do hud.setValues(score, lives, level);
+        return;
+    }
+
+    /** Main loop. Dispatches on the current state until exit is requested.
+     *  Returns: void. */
+    method void run() {
+        while (~exit) {
+            if (state = ST_START) {
+                do runStart();
+            } else {
+                if (state = ST_PLAYING) {
+                    do runPlaying();
+                } else {
+                    do runGameOver();
+                }
+            }
+        }
+        return;
+    }
+
+    // ------------------------------ START ------------------------------
+
+    /** START state: paint the title screen once, then poll keys without
+     *  blocking. Each loop increments a counter used as the RNG seed. SPACE
+     *  (or ENTER) starts the game; ESC quits. Returns: void. */
+    method void runStart() {
+        var int key;
+
+        do Screen.clearScreen();
+        do drawStartScreen();
+
+        let key = 0;
+        // Spin until SPACE/ENTER (start) or ESC (quit). Counter seeds the RNG.
+        while ((~(key = K_SPACE)) & (~(key = K_ENTER)) & (~(key = K_ESC))) {
+            let key = Keyboard.keyPressed();
+            let seedCtr = seedCtr + 1;
+            if (seedCtr > 30000) { let seedCtr = 1; }   // avoid 16-bit overflow
+            do Sys.wait(5);
+        }
+
+        if (key = K_ESC) {
+            let exit = true;
+            return;
+        }
+
+        // Seed the RNG and start playing.
+        do Rng.setSeed(seedCtr);
+        do startPlaying();
+        return;
+    }
+
+    /** Transitions into PLAYING: repaint board + HUD, reset state, draw the
+     *  player and obstacles once. Returns: void. */
+    method void startPlaying() {
+        do resetState();
+        do Screen.clearScreen();
+        do board.draw();
+        do hud.drawLabels();
+        do hud.forceRedraw();
+        do hud.draw();
+        do drawAllObstacles();
+        do player.draw();
+        let playerShown = true;
+        let state = ST_PLAYING;
+        return;
+    }
+
+    // ----------------------------- PLAYING -----------------------------
+
+    /** One PLAYING frame: read input (edge-triggered), move obstacles, handle
+     *  collisions, update score/level/HUD, pace with Sys.wait. Returns: void. */
+    method void runPlaying() {
+        var int key;
+
+        let key = Keyboard.keyPressed();
+        do handleInput(key);
+        let prevKey = key;
+
+        do updateObstacles();
+        do handleInvulnerability();
+        do hud.draw();
+
+        if (lives < 1) {
+            let state = ST_GAMEOVER;
+            do drawGameOver();
+            return;
+        }
+        if (won) {
+            let state = ST_GAMEOVER;
+            do drawGameOver();
+            return;
+        }
+
+        do Sys.wait(WAIT_MS);
+        return;
+    }
+
+    /** Edge-triggered input: a lane change happens only when a movement key
+     *  transitions from "not pressed last loop" to "pressed now", so one tap
+     *  moves exactly one lane. ESC quits. Params: key = current key.
+     *  Returns: void. */
+    method void handleInput(int key) {
+        if (key = K_ESC) {
+            let exit = true;
+            return;
+        }
+        // Left edge: left arrow or 'A'.
+        if (((key = K_LEFT) | (key = K_A)) & (~((prevKey = K_LEFT) | (prevKey = K_A)))) {
+            do movePlayerLeft();
+        }
+        // Right edge: right arrow or 'D'.
+        if (((key = K_RIGHT) | (key = K_D)) & (~((prevKey = K_RIGHT) | (prevKey = K_D)))) {
+            do movePlayerRight();
+        }
+        return;
+    }
+
+    /** Moves the player left, keeping it visible (handles the invuln-blink
+     *  state so the sprite is shown after a move). Returns: void. */
+    method void movePlayerLeft() {
+        if (~playerShown) { do player.draw(); let playerShown = true; }
+        do player.moveLeft();
+        return;
+    }
+
+    /** Moves the player right, keeping it visible. Returns: void. */
+    method void movePlayerRight() {
+        if (~playerShown) { do player.draw(); let playerShown = true; }
+        do player.moveRight();
+        return;
+    }
+
+    /** Advances every obstacle, recycles those that leave the bottom (scoring
+     *  a dodge), and checks collisions with the player. Returns: void. */
+    method void updateObstacles() {
+        var int i;
+        var Obstacle o;
+
+        let i = 0;
+        while (i < obstacleCount) {
+            let o = obstacles[i];
+            do o.update(speed);
+
+            // Dodged: fully below the field and not yet scored.
+            if ((o.getY() > fieldBottom) & (~o.isScored())) {
+                do o.markScored();
+                do addScore();
+                do recycleObstacle(o);
+            } else {
+                // Collision only while not invulnerable.
+                if (invuln = 0) {
+                    if (collides(o)) {
+                        do onHit(o);
+                    }
+                }
+            }
+            let i = i + 1;
+        }
+        return;
+    }
+
+    /** AABB overlap test between the player and an obstacle. True when the
+     *  boxes overlap on BOTH axes. Params: o = obstacle. Returns: boolean. */
+    method boolean collides(Obstacle o) {
+        var int px, py, pw, ph;
+        var int ox, oy, ow, oh;
+
+        let px = player.getX();
+        let py = player.getY();
+        let pw = player.getWidth();
+        let ph = player.getHeight();
+        let ox = o.getX();
+        let oy = o.getY();
+        let ow = o.getWidth();
+        let oh = o.getHeight();
+
+        // No overlap if one box is entirely left/right/above/below the other.
+        if ((px + pw) < ox) { return false; }
+        if ((ox + ow) < px) { return false; }
+        if ((py + ph) < oy) { return false; }
+        if ((oy + oh) < py) { return false; }
+        return true;
+    }
+
+    /** Handles a hit: lose a life, recycle the obstacle, grant a few loops of
+     *  invulnerability. Params: o = the obstacle that was hit. Returns: void. */
+    method void onHit(Obstacle o) {
+        let lives = lives - 1;
+        do hud.setValues(score, lives, level);
+        do recycleObstacle(o);
+        let invuln = 25;     // ~1 second of grace at WAIT_MS=40
+        let blinkCtr = 0;
+        return;
+    }
+
+    /** Counts a dodged obstacle and raises the level every 10 points, which
+     *  speeds the game up (to a cap). At level 10 the player wins.
+     *  Returns: void. */
+    method void addScore() {
+        var int newLevel;
+
+        let score = score + 1;
+        // newLevel = 1 + score/10, capped at 10.
+        let newLevel = 1 + (score / 10);
+        if (newLevel > 10) { let newLevel = 10; }
+
+        if (newLevel > level) {
+            let level = newLevel;
+            // Speed up: +1 px/loop per level, reduce wait (floor at WAIT_MIN).
+            let speed = 2 + (level - 1);
+            if (speed > 7) { let speed = 7; }
+            let WAIT_MS = 40 - (3 * (level - 1));
+            if (WAIT_MS < WAIT_MIN) { let WAIT_MS = WAIT_MIN; }
+            if (level = 10) { let won = true; }
+        }
+        do hud.setValues(score, lives, level);
+        return;
+    }
+
+    /** Invulnerability timer + blink. While active, the player sprite toggles
+     *  on/off every few loops; when it expires the sprite is left drawn.
+     *  Returns: void. */
+    method void handleInvulnerability() {
+        if (invuln > 0) {
+            let invuln = invuln - 1;
+            let blinkCtr = blinkCtr + 1;
+            if (blinkCtr > 3) {
+                let blinkCtr = 0;
+                if (playerShown) {
+                    do player.erase();
+                    let playerShown = false;
+                } else {
+                    do player.draw();
+                    let playerShown = true;
+                }
+            }
+            if (invuln = 0) {
+                // Ensure the player is visible when grace ends.
+                if (~playerShown) {
+                    do player.draw();
+                    let playerShown = true;
+                }
+            }
+        }
+        return;
+    }
+
+    /** Recycles an obstacle above the field with a random lane and type,
+     *  placed above the current highest obstacle so there is always vertical
+     *  spacing (keeps at least one lane passable). Params: o. Returns: void. */
+    method void recycleObstacle(Obstacle o) {
+        var int newLane;
+        var int newType;
+        var int newY;
+        var int topMost;
+
+        let newLane = Rng.nextInt(3);     // 0..2
+        let newType = Rng.nextInt(3);     // 0..2
+        let topMost = highestTop();        // smallest y among obstacles
+        // Candidate: spawnGap above the current highest obstacle. Never spawn
+        // on-screen; force it clearly above the top edge (negative y) so it
+        // scrolls in, and so at most two lanes are ever blocked at one height.
+        let newY = topMost - spawnGap;
+        if (newY > (0 - 60)) {
+            let newY = 0 - 60;
+        }
+        do o.recycle(newLane, newY, newType);
+        return;
+    }
+
+    /** Returns the smallest (highest on screen) top-y among all obstacles.
+     *  Used to space recycled obstacles. Returns: int (may be negative). */
+    method int highestTop() {
+        var int i;
+        var int best;
+        var Obstacle o;
+
+        let best = 32000;
+        let i = 0;
+        while (i < obstacleCount) {
+            let o = obstacles[i];
+            if (o.getY() < best) {
+                let best = o.getY();
+            }
+            let i = i + 1;
+        }
+        return best;
+    }
+
+    /** Draws every obstacle (used when (re)entering PLAYING). Returns: void. */
+    method void drawAllObstacles() {
+        var int i;
+        var Obstacle o;
+
+        let i = 0;
+        while (i < obstacleCount) {
+            let o = obstacles[i];
+            do o.draw();
+            let i = i + 1;
+        }
+        return;
+    }
+
+    // ----------------------------- GAMEOVER ----------------------------
+
+    /** GAMEOVER state: poll keys without blocking. R restarts, ESC quits.
+     *  Returns: void. */
+    method void runGameOver() {
+        var int key;
+
+        let key = Keyboard.keyPressed();
+        if (key = K_ESC) {
+            let exit = true;
+            return;
+        }
+        if (key = K_R) {
+            do startPlaying();
+            return;
+        }
+        do Sys.wait(20);
+        return;
+    }
+
+    // ---------------------------- SCREENS ------------------------------
+
+    /** Draws the START screen: title, controls and the "press SPACE" prompt.
+     *  Printed once per entry (no per-loop String creation). Returns: void. */
+    method void drawStartScreen() {
+        do board.draw();
+        do Output.moveCursor(8, 28);
+        do Output.printString("SUBWAY JACK");
+        do Output.moveCursor(11, 26);
+        do Output.printString("Esquiva los obstaculos");
+        do Output.moveCursor(13, 28);
+        do Output.printString("Flechas o A/D: mover");
+        do Output.moveCursor(16, 27);
+        do Output.printString("Presiona ESPACIO");
+        do Output.moveCursor(17, 30);
+        do Output.printString("para jugar");
+        do Output.moveCursor(19, 30);
+        do Output.printString("ESC: salir");
+        return;
+    }
+
+    /** Draws the GAMEOVER (or victory) screen with the final score and the
+     *  restart/quit options. Returns: void. */
+    method void drawGameOver() {
+        // Clear only the central play field; keep frames and HUD.
+        do board.clearField();
+
+        if (won) {
+            do Output.moveCursor(9, 29);
+            do Output.printString("GANASTE!");
+        } else {
+            do Output.moveCursor(9, 28);
+            do Output.printString("GAME OVER");
+        }
+        do Output.moveCursor(11, 27);
+        do Output.printString("Puntaje final: ");
+        do Output.printInt(score);
+        do Output.moveCursor(13, 27);
+        do Output.printString("Nivel: ");
+        do Output.printInt(level);
+        do Output.moveCursor(16, 28);
+        do Output.printString("R: reiniciar");
+        do Output.moveCursor(17, 28);
+        do Output.printString("ESC: salir");
+        let playerShown = false;
+        return;
+    }
+
+    /** Releases everything the Game owns, in order: obstacles, the array, the
+     *  Hud, the Player, the Board, then this object. Returns: void. */
+    method void dispose() {
+        var int i;
+        var Obstacle o;
+
+        let i = 0;
+        while (i < obstacleCount) {
+            let o = obstacles[i];
+            do o.dispose();
+            let i = i + 1;
+        }
+        do obstacles.dispose();
+        do hud.dispose();
+        do player.dispose();
+        do board.dispose();
+
+        do Memory.deAlloc(this);
+        return;
+    }
+}

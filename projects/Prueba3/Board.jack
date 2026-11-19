@@ -1,0 +1,198 @@
+class Board {
+    // Layout constants are stored as instance fields (not static) so the
+    // constructor allocates a non-zero-size object. A class whose only data
+    // is static would make `new` call Memory.alloc(0), which halts the VM
+    // with "Allocated memory size must be positive".
+    //
+    // --- Play field bounds ---
+    field int FIELD_LEFT;      // 128
+    field int FIELD_RIGHT;     // 383
+    field int FIELD_TOP;       // 0
+    field int FIELD_BOTTOM;    // 255
+
+    // --- Lane divider x positions ---
+    field int DIV1_X;          // 210  (between lane 0 and lane 1)
+    field int DIV2_X;          // 300  (between lane 1 and lane 2)
+
+    // --- Side panel bounds ---
+    field int LEFT_PANEL_R;    // 127  (right edge of left HUD)
+    field int RIGHT_PANEL_L;   // 384  (left edge of right HUD)
+
+    /** Builds the Board and initializes the layout constants.
+     *  Returns: the new Board. */
+    constructor Board new() {
+        let FIELD_LEFT = 128;
+        let FIELD_RIGHT = 383;
+        let FIELD_TOP = 0;
+        let FIELD_BOTTOM = 255;
+
+        let DIV1_X = 210;
+        let DIV2_X = 300;
+
+        let LEFT_PANEL_R = 127;
+        let RIGHT_PANEL_L = 384;
+        return this;
+    }
+
+    /** Draws the whole static scene a single time (no flicker):
+     *  outer frame, thick side borders, dotted lane dividers, decorative
+     *  posts, and both HUD panels with text.
+     *  Returns: void. */
+    method void draw() {
+        do Screen.setColor(true);
+
+        do drawField();
+        do drawSideBorders();
+        do drawLaneDividers();
+        do drawPosts();
+        do drawHud();
+        return;
+    }
+
+    /** Outer rectangular frame around the play field.
+     *  Drawn as four thin lines (not a filled rectangle) so the interior
+     *  stays black. Returns: void. */
+    method void drawField() {
+        do Screen.drawLine(FIELD_LEFT, FIELD_TOP, FIELD_RIGHT, FIELD_TOP);
+        do Screen.drawLine(FIELD_LEFT, FIELD_BOTTOM, FIELD_RIGHT, FIELD_BOTTOM);
+        do Screen.drawLine(FIELD_LEFT, FIELD_TOP, FIELD_LEFT, FIELD_BOTTOM);
+        do Screen.drawLine(FIELD_RIGHT, FIELD_TOP, FIELD_RIGHT, FIELD_BOTTOM);
+        return;
+    }
+
+    /** Thick vertical borders on both inner edges of the play field.
+     *  Two filled rectangles, 3 px wide, framing the lanes.
+     *  Returns: void. */
+    method void drawSideBorders() {
+        // Left thick border (x 128..130)
+        do Screen.drawRectangle(FIELD_LEFT, FIELD_TOP, FIELD_LEFT + 2, FIELD_BOTTOM);
+        // Right thick border (x 381..383)
+        do Screen.drawRectangle(FIELD_RIGHT - 2, FIELD_TOP, FIELD_RIGHT, FIELD_BOTTOM);
+        return;
+    }
+
+    /** Dotted vertical dividers between the three lanes.
+     *  Each divider is drawn with a while loop: short 8 px segments followed
+     *  by 8 px gaps, giving a dashed "road marking" look.
+     *  Returns: void. */
+    method void drawLaneDividers() {
+        do drawDottedVertical(DIV1_X);
+        do drawDottedVertical(DIV2_X);
+        return;
+    }
+
+    /** Draws one dashed vertical line at column x from top to bottom.
+     *  Segment length 8 px, gap 8 px (period 16). No division or modulo used.
+     *  Params: x = screen column for the dashed line.
+     *  Returns: void. */
+    method void drawDottedVertical(int x) {
+        var int y;
+        let y = FIELD_TOP;
+        while (y < FIELD_BOTTOM) {
+            // Draw an 8 px dash (clamp so we never exceed FIELD_BOTTOM).
+            if ((y + 7) < FIELD_BOTTOM) {
+                do Screen.drawLine(x, y, x, y + 7);
+            } else {
+                do Screen.drawLine(x, y, x, FIELD_BOTTOM);
+            }
+            let y = y + 16;   // advance one dash + one gap
+        }
+        return;
+    }
+
+    /** Decorative "fence posts": small 4x6 filled rectangles stacked along
+     *  both inner edges of the field, giving a track-side detail.
+     *  Posts are spaced every 32 px. No division/modulo used.
+     *  Returns: void. */
+    method void drawPosts() {
+        var int y;
+        let y = 10;
+        while (y < 240) {
+            // Left side posts (just inside the left thick border).
+            do Screen.drawRectangle(FIELD_LEFT + 4, y, FIELD_LEFT + 7, y + 5);
+            // Right side posts (just inside the right thick border).
+            do Screen.drawRectangle(FIELD_RIGHT - 7, y, FIELD_RIGHT - 4, y + 5);
+            let y = y + 32;
+        }
+        return;
+    }
+
+    /** Draws both HUD panel FRAMES plus the panels' STATIC text (title on the
+     *  left, controls legend on the right). The dynamic stats (score, lives,
+     *  level) are NOT drawn here; the Hud class owns and updates those, so
+     *  they are repainted only when they change.
+     *  Text is placed with Output on the 64x23 cell grid so every string
+     *  stays inside its panel. Returns: void. */
+    method void drawHud() {
+        // --- Left panel frame (x 2..125, y 2..253) ---
+        do Screen.drawLine(2, 2, LEFT_PANEL_R - 2, 2);
+        do Screen.drawLine(2, 253, LEFT_PANEL_R - 2, 253);
+        do Screen.drawLine(2, 2, 2, 253);
+        do Screen.drawLine(LEFT_PANEL_R - 2, 2, LEFT_PANEL_R - 2, 253);
+
+        // --- Right panel frame (x 386..509, y 2..253) ---
+        do Screen.drawLine(RIGHT_PANEL_L + 2, 2, 509, 2);
+        do Screen.drawLine(RIGHT_PANEL_L + 2, 253, 509, 253);
+        do Screen.drawLine(RIGHT_PANEL_L + 2, 2, RIGHT_PANEL_L + 2, 253);
+        do Screen.drawLine(509, 2, 509, 253);
+
+        // --- Left panel static title (columns 1..14) ---
+        do Output.moveCursor(1, 4);
+        do Output.printString("SUBWAY");
+        do Output.moveCursor(2, 5);
+        do Output.printString("JACK");
+        // Stats labels/numbers are drawn by the Hud (rows 5,7,9).
+
+        // --- Right panel static controls legend (columns 48..62) ---
+        do Output.moveCursor(1, 50);
+        do Output.printString("CONTROLES");
+        do Output.moveCursor(3, 49);
+        do Output.printString("A/D o");
+        do Output.moveCursor(4, 49);
+        do Output.printString("flechas:");
+        do Output.moveCursor(5, 49);
+        do Output.printString("mover");
+        do Output.moveCursor(7, 49);
+        do Output.printString("ESPACIO:");
+        do Output.moveCursor(8, 49);
+        do Output.printString("iniciar");
+        do Output.moveCursor(10, 49);
+        do Output.printString("R: reinic");
+        do Output.moveCursor(12, 49);
+        do Output.printString("ESC: salir");
+        return;
+    }
+
+    /** Clears the INTERIOR of the play field (everything strictly inside the
+     *  thick side borders), used on restart to wipe sprites without touching
+     *  the frame, dividers or HUD panels. Redraws the dashed dividers and
+     *  posts afterwards so the track decoration stays intact.
+     *  Returns: void. */
+    method void clearField() {
+        // Black-out the inner playable area (inside the 3px side borders).
+        do Screen.setColor(false);
+        do Screen.drawRectangle(FIELD_LEFT + 3, FIELD_TOP + 1, FIELD_RIGHT - 3, FIELD_BOTTOM - 1);
+        do Screen.setColor(true);
+
+        // Repaint the track decoration that lived inside the field.
+        do drawLaneDividers();
+        do drawPosts();
+        return;
+    }
+
+    /** Getter: left edge x of the play field. */
+    method int getFieldLeft() { return FIELD_LEFT; }
+    /** Getter: right edge x of the play field. */
+    method int getFieldRight() { return FIELD_RIGHT; }
+    /** Getter: top edge y of the play field. */
+    method int getFieldTop() { return FIELD_TOP; }
+    /** Getter: bottom edge y of the play field. */
+    method int getFieldBottom() { return FIELD_BOTTOM; }
+
+    /** Releases the Board. It owns no sub-objects, so it only frees itself.
+     *  Returns: void. */
+    method void dispose() {
+        do Memory.deAlloc(this);
+        return;
+    }
+}

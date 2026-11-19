@@ -1,0 +1,119 @@
+class Hud {
+    field int score;        // current score
+    field int lives;        // current lives
+    field int level;        // current level
+
+    field int prevScore;    // last value drawn (to detect changes)
+    field int prevLives;
+    field int prevLevel;
+
+    // Column where each number starts (just after its label text).
+    field int scoreCol;     // after "PUNTOS: "
+    field int livesCol;     // after "VIDAS: "
+    field int levelCol;     // after "NIVEL: "
+
+    // Rows for each stat (Output grid rows).
+    field int scoreRow;
+    field int livesRow;
+    field int levelRow;
+
+    /** Builds the HUD model with starting values and fixed layout columns.
+     *  Params: startScore, startLives, startLevel = initial stat values.
+     *  Returns: the new Hud. */
+    constructor Hud new(int startScore, int startLives, int startLevel) {
+        let score = startScore;
+        let lives = startLives;
+        let level = startLevel;
+
+        // Force a first repaint by making the "previous" values differ.
+        let prevScore = -1;
+        let prevLives = -1;
+        let prevLevel = -1;
+
+        // Layout: labels start at column 1; numbers after the label text.
+        let scoreRow = 5;
+        let livesRow = 7;
+        let levelRow = 9;
+        let scoreCol = 9;    // "PUNTOS: " is 8 chars -> number at col 9
+        let livesCol = 8;    // "VIDAS: "  is 7 chars -> number at col 8
+        let levelCol = 8;    // "NIVEL: "  is 7 chars -> number at col 8
+        return this;
+    }
+
+    /** Prints the fixed labels once (called when the game screen is painted).
+     *  Returns: void. */
+    method void drawLabels() {
+        do Output.moveCursor(scoreRow, 1);
+        do Output.printString("PUNTOS: ");
+        do Output.moveCursor(livesRow, 1);
+        do Output.printString("VIDAS: ");
+        do Output.moveCursor(levelRow, 1);
+        do Output.printString("NIVEL: ");
+        return;
+    }
+
+    /** Redraws only the numbers that changed since the last call.
+     *  Returns: void. */
+    method void draw() {
+        if (~(score = prevScore)) {
+            do clearNumber(scoreRow, scoreCol);
+            do Output.moveCursor(scoreRow, scoreCol);
+            do Output.printInt(score);
+            let prevScore = score;
+        }
+        if (~(lives = prevLives)) {
+            do clearNumber(livesRow, livesCol);
+            do Output.moveCursor(livesRow, livesCol);
+            do Output.printInt(lives);
+            let prevLives = lives;
+        }
+        if (~(level = prevLevel)) {
+            do clearNumber(levelRow, levelCol);
+            do Output.moveCursor(levelRow, levelCol);
+            do Output.printInt(level);
+            let prevLevel = level;
+        }
+        return;
+    }
+
+    /** Clears up to 5 character cells at (row, col) by printing spaces, so a
+     *  previously longer number leaves no leftover digits.
+     *  Params: row, col = top-left cell of the number field. Returns: void. */
+    method void clearNumber(int row, int col) {
+        do Output.moveCursor(row, col);
+        do Output.printString("     ");   // five spaces is enough for our range
+        return;
+    }
+
+    /** Forces the next draw() to repaint every number (used after a full
+     *  screen repaint, e.g. on restart). Returns: void. */
+    method void forceRedraw() {
+        let prevScore = -1;
+        let prevLives = -1;
+        let prevLevel = -1;
+        return;
+    }
+
+    /** Sets the current stat values (does not draw). Params: s, l, lv.
+     *  Returns: void. */
+    method void setValues(int s, int l, int lv) {
+        let score = s;
+        let lives = l;
+        let level = lv;
+        return;
+    }
+
+    /** Getter: current score. */
+    method int getScore() { return score; }
+    /** Getter: current lives. */
+    method int getLives() { return lives; }
+    /** Getter: current level. */
+    method int getLevel() { return level; }
+
+    /** Releases the Hud. Owns no sub-objects, frees only itself.
+     *  Returns: void. */
+    method void dispose() {
+        do Memory.deAlloc(this);
+        return;
+    }
+}
