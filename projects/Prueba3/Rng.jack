@@ -1,0 +1,45 @@
+class Rng {
+    static int seed;    // current generator state (kept >= 0)
+
+    /** Seeds the generator. Any int is accepted; it is forced non-negative.
+     *  Params: s = initial seed value. Returns: void. */
+    function void setSeed(int s) {
+        // Force a non-negative seed by masking off the sign bit (bit 15).
+        // (s & 32767) keeps bits 0..14, always >= 0.
+        let seed = s & 32767;
+        // Avoid a zero seed, which would make some LCGs stick.
+        if (seed = 0) {
+            let seed = 12345;
+        }
+        return;
+    }
+
+    /** Advances the generator one step and returns a non-negative value.
+     *
+     *  This is the classic 16-bit LCG: seed = seed * 25173 + 13849, taken
+     *  modulo 65536. Jack's integer multiplication/addition already keep only
+     *  the low 16 bits (modular 2^16 arithmetic), so the wraparound IS the LCG
+     *  modulus; this never raises an error and yields a full-period sequence.
+     *  We then AND with 32767 to drop the sign bit and return a value in
+     *  0..32767. Returns: a pseudo-random int in 0..32767. */
+    function int nextRaw() {
+        let seed = (seed * 25173) + 13849;   // low 16 bits (mod 65536)
+        return seed & 32767;                 // force non-negative 0..32767
+    }
+
+    /** Returns a pseudo-random integer in the range 0..max-1.
+     *  Params: max = exclusive upper bound (must be > 0).
+     *  Uses manual modulo (no '%' operator): r - ((r / max) * max).
+     *  Returns: int in 0..max-1 (0 if max <= 0, as a safe fallback). */
+    function int nextInt(int max) {
+        var int r;      // raw random value
+        var int q;      // integer quotient r / max
+
+        if (max < 1) {
+            return 0;
+        }
+        let r = Rng.nextRaw();
+        let q = r / max;                 // integer division
+        return r - (q * max);            // manual modulo r mod max
+    }
+}
