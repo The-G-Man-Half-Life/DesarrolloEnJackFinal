@@ -153,12 +153,16 @@ class Board {
         do Output.moveCursor(5, 49);
         do Hud.printText("mover");
         do Output.moveCursor(7, 49);
-        do Hud.printText("ESPACIO:");
+        do Hud.printText("W o arriba:");
         do Output.moveCursor(8, 49);
-        do Hud.printText("iniciar");
+        do Hud.printText("saltar");
         do Output.moveCursor(10, 49);
+        do Hud.printText("ESPACIO:");
+        do Output.moveCursor(11, 49);
+        do Hud.printText("iniciar");
+        do Output.moveCursor(13, 49);
         do Hud.printText("R: reinic");
-        do Output.moveCursor(12, 49);
+        do Output.moveCursor(15, 49);
         do Hud.printText("ESC: salir");
         return;
     }

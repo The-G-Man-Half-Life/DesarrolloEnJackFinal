@@ -33,20 +33,26 @@ class Obstacle {
         // Size per type (precomputed; no division at run time).
         if (type = 1) {            // big train/block
             let width = 48;
-            let height = 60;
         } else {
             if (type = 2) {        // cone
                 let width = 24;
-                let height = 26;
             } else {               // barrier (type 0 and default)
                 let width = 56;
-                let height = 18;
             }
         }
+        let height = Obstacle.heightFor(type);
 
         // Center the sprite on its lane: x = laneCenter - width/2.
         let x = laneCenter(aLane) - (width / 2);
         return;
+    }
+
+    /** Height (px) of an obstacle type; Game also uses it to space obstacles.
+     *  Params: aType = 0 barrier, 1 train, 2 cone. Returns: height in px. */
+    function int heightFor(int aType) {
+        if (aType = 1) { return 60; }
+        if (aType = 2) { return 26; }
+        return 18;
     }
 
     /** Returns the horizontal center (px) of a lane.
@@ -231,6 +237,8 @@ class Obstacle {
     method int getBottom() { return y + height; }
     /** Getter: current lane index (0..2). */
     method int getLane() { return lane; }
+    /** Getter: obstacle type (0 barrier, 1 train, 2 cone). */
+    method int getType() { return type; }
     /** Getter: whether this pass has already been scored as dodged. */
     method boolean isScored() { return scored; }
     /** Marks this pass as scored so it is counted only once. Returns: void. */

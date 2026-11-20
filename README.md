@@ -2,7 +2,7 @@
 
 Videojuego retro 2D estilo *Subway Surfers* con **vista cenital** y **3 carriles verticales**, implementado en el lenguaje **Jack** del ecosistema **Nand2Tetris** (plataforma Hack).
 
-El **Hito 2** convierte el renderizado estático del Hito 1 en un **juego completo y jugable**: máquina de estados, bucle principal no bloqueante, movimiento del jugador, obstáculos que caen y se reciclan, colisiones AABB, puntaje, vidas, niveles, reinicio y salida controlada. Todos los objetos se crean una sola vez y se liberan con `dispose()`; el heap se mantiene estable entre partidas (ver [Pruebas de control](#pruebas-de-control)).
+El **Hito 2** convierte el renderizado estático del Hito 1 en un **juego completo y jugable**: máquina de estados, bucle principal no bloqueante, movimiento y salto del jugador, obstáculos que caen y se reciclan, colisiones AABB, puntaje, vidas, niveles, reinicio y salida controlada. Todos los objetos se crean una sola vez y se liberan con `dispose()`; el heap se mantiene estable entre partidas (ver [Pruebas de control](#pruebas-de-control)).
 
 | Enlace | URL |
 |--------|-----|
@@ -27,7 +27,7 @@ DesarrolloEnJackFinal/
 
 - Pantalla monocromática de **512×256 px** (x: 0..511, y: 0..255).
 - **Zona de juego:** x 128..383 (256 px de ancho), y 0..255.
-- El jugador está abajo y los obstáculos **descienden** desde arriba. Esquívalos cambiando de carril.
+- El jugador está abajo y los obstáculos **descienden** desde arriba. Esquívalos cambiando de carril o saltando.
 - **Paneles de HUD** laterales: izquierdo con **PUNTOS / VIDAS / NIVEL** (dinámicos), derecho con la leyenda de controles (estática).
 
 | Carril | Posición | Centro x (px) |
@@ -36,11 +36,11 @@ DesarrolloEnJackFinal/
 | 1 | Central | 256 |
 | 2 | Derecho | 341 |
 
-| Obstáculo | Ancho × alto (px) |
-|-----------|-------------------|
-| Barrera | 56 × 18 |
-| Tren | 48 × 60 |
-| Cono | 24 × 26 |
+| Obstáculo | Ancho × alto (px) | Se puede saltar |
+|-----------|-------------------|-----------------|
+| Barrera | 56 × 18 | Sí |
+| Tren | 48 × 60 | No |
+| Cono | 24 × 26 | Sí |
 
 ---
 
@@ -49,10 +49,11 @@ DesarrolloEnJackFinal/
 - Empiezas con **3 vidas** y en **nivel 1**.
 - **+1 punto** por cada obstáculo esquivado (sale por abajo sin golpearte).
 - Cada **10 puntos** subes de nivel y el juego acelera: la caída es de `2 + (nivel - 1)` px por ciclo (tope 7) y la espera por ciclo es de `40 - 3 × (nivel - 1)` ms (mínimo 16).
+- **Saltar** (W o flecha arriba): el personaje se eleva 8 px con su sombra en el suelo y pasa por encima de barreras y conos; los trenes no se pueden saltar. Cada salto cubre 80 px de pista (dura `80 / velocidad` ciclos) y al aterrizar debes esperar 10 ciclos para volver a saltar.
 - Al **chocar** pierdes 1 vida, el obstáculo golpeado se recicla y quedas **invulnerable** 25 ciclos (cerca de 1 s): el personaje **parpadea** para que no pierdas todas las vidas de golpe.
 - Si las vidas llegan a **0**: **GAME OVER**.
 - Al llegar al **nivel 10** (90 puntos): **GANASTE!** (condición de victoria).
-- Siempre hay carriles libres: cada obstáculo reciclado aparece 70 px por encima del más alto y ningún obstáculo mide más de 60 px de alto, así que nunca hay dos a la misma altura.
+- Siempre se puede esquivar: cada obstáculo nuevo aparece a (su altura + 89 px) por encima del más alto. Los 89 px son 40 de alto del jugador, 1 de contacto y 48 de margen para reaccionar, así que a la altura del jugador nunca coinciden dos obstáculos y siempre basta un cambio de carril.
 
 ---
 
@@ -62,11 +63,12 @@ DesarrolloEnJackFinal/
 |-------|--------|
 | **Flecha izquierda** o **A** | Mover al carril de la izquierda |
 | **Flecha derecha** o **D** | Mover al carril de la derecha |
+| **Flecha arriba** o **W** | Saltar (barreras y conos) |
 | **ESPACIO** o **ENTER** | Iniciar el juego desde la pantalla de inicio |
 | **R** | Reiniciar (en GAME OVER o victoria) |
 | **ESC** | Salir del juego (en cualquier pantalla) |
 
-El movimiento es **por flanco** (antirrebote): cada pulsación mueve exactamente un carril; mantener la tecla no salta varios carriles.
+El movimiento y el salto son **por flanco** (antirrebote): cada pulsación mueve exactamente un carril o da un solo salto; mantener la tecla no repite la acción.
 
 ---
 
@@ -85,10 +87,10 @@ Todas en [`projects/SubwayJack/`](projects/SubwayJack/).
 | Archivo | Responsabilidad |
 |---------|-----------------|
 | [`Main.jack`](projects/SubwayJack/Main.jack) | Punto de entrada. Crea `Game`, ejecuta `run()` y `dispose()`. |
-| [`Game.jack`](projects/SubwayJack/Game.jack) | Orquestador: máquina de estados, game loop no bloqueante, entrada por flanco, colisiones AABB, puntaje/niveles, reinicio y salida. Dueño de `Board`, `Player`, `Hud` y el *pool* de 4 `Obstacle`. |
+| [`Game.jack`](projects/SubwayJack/Game.jack) | Orquestador: máquina de estados, game loop no bloqueante, entrada por flanco, salto, colisiones AABB, espaciado de obstáculos, puntaje/niveles, reinicio y salida. Dueño de `Board`, `Player`, `Hud` y el *pool* de 4 `Obstacle`. |
 | [`Board.jack`](projects/SubwayJack/Board.jack) | Escenario estático: marco, bordes, separadores punteados, postes y los **marcos + textos estáticos** del HUD. `clearField()` limpia solo la zona de juego al mostrar GAME OVER. |
-| [`Player.jack`](projects/SubwayJack/Player.jack) | Personaje compuesto (primitivas). `moveLeft/moveRight/setLane/reset`, `draw/erase` desacoplados y getters AABB. |
-| [`Obstacle.jack`](projects/SubwayJack/Obstacle.jack) | Obstáculo con 3 tipos (barrera, tren, cono). `update(speed)` lo baja, `recycle(...)` lo reubica arriba sin `new`, dibujo **recortado** a la zona de juego. |
+| [`Player.jack`](projects/SubwayJack/Player.jack) | Personaje compuesto (primitivas). `moveLeft/moveRight/setLane/reset`, `setLift` para el salto (dibujo elevado con sombra; la caja AABB queda en el suelo), `draw/erase` desacoplados y getters AABB. |
+| [`Obstacle.jack`](projects/SubwayJack/Obstacle.jack) | Obstáculo con 3 tipos (barrera, tren, cono). `update(speed)` lo baja, `recycle(...)` lo reubica arriba sin `new`, dibujo **recortado** a la zona de juego. `Obstacle.heightFor(tipo)` da la altura que usa `Game` para espaciarlos. |
 | [`Hud.jack`](projects/SubwayJack/Hud.jack) | Textos dinámicos **PUNTOS/VIDAS/NIVEL**: solo repinta un número cuando cambia y borra el anterior con espacios. `Hud.printText(s)` imprime un texto fijo y lo libera. |
 | [`Rng.jack`](projects/SubwayJack/Rng.jack) | Generador pseudoaleatorio (LCG de 16 bits). `setSeed(s)` y `nextInt(max)` devuelve 0..max-1. |
 
@@ -165,8 +167,10 @@ Ejecutadas el 19 de noviembre de 2026 con el `JackCompiler` y el VM Emulator 2.5
 | Compilación de las 7 clases | Sin errores; los `.vm` del repositorio coinciden con una compilación limpia. |
 | START > ESPACIO > PLAYING > choques hasta 0 vidas > GAME OVER > R | La partida reinicia con 0 puntos, 3 vidas y nivel 1. |
 | Victoria (puntaje llevado a 89 y un obstáculo esquivado) | 90 puntos, nivel 10, pantalla GANASTE!; R reinicia el estado. |
+| Salto a velocidad 2 y 7 (obstáculo forzado en el carril del jugador) | Cono y barrera: 0 vidas perdidas con salto, 1 sin salto. Tren: 1 vida perdida con o sin salto. |
+| Espaciado: jugador automático que solo cambia de carril y reacciona al instante | Versión anterior: 1 choque inevitable en 60 obstáculos a velocidad 2 y 2 a velocidad 7. Versión actual: 0 choques en 60 a velocidad 2 y 0 en 90 a velocidad 7. |
 | ESC en START y en PLAYING | El juego libera sus objetos y el programa termina. |
-| Memoria en 40 partidas seguidas | El heap no crece entre partidas. |
+| Memoria en 25 partidas seguidas | El heap no crece entre partidas. |
 
 ---
 

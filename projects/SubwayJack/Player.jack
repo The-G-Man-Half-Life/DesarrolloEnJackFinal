@@ -4,6 +4,7 @@ class Player {
     field int width;    // bounding box width
     field int height;   // bounding box height
     field int lane;     // 0=left, 1=center, 2=right
+    field int lift;     // px the sprite is drawn above y while jumping (0 on the ground)
 
     /** Creates the player on the given starting lane, placed near the bottom.
      *  Params: startLane = 0 (left), 1 (center) or 2 (right).
@@ -19,6 +20,7 @@ class Player {
         let x = laneCenter(startLane) - 12;
         // Bottom placement: box top-left y so the feet are near y=250.
         let y = 250 - height;    // 210
+        let lift = 0;
 
         return this;
     }
@@ -73,46 +75,61 @@ class Player {
     method void reset() {
         do setLane(1);
         let y = 250 - height;
+        let lift = 0;
         return;
     }
 
-    /** Draws the composite character sprite at (x, y) in white.
+    /** Sets the jump lift in px (0 = on the ground). Does NOT draw; the
+     *  caller erases before and draws after. The AABB keeps the ground y.
+     *  Params: l = lift in px. Returns: void. */
+    method void setLift(int l) {
+        let lift = l;
+        return;
+    }
+
+    /** Draws the composite character sprite in black, lift px above y.
+     *  While airborne a short shadow line stays at the ground under the feet.
      *  Pure drawing: never erases or changes state besides the pen color.
      *  Returns: void. */
     method void draw() {
         var int cx;     // horizontal center of the sprite
         var int headCy; // head center y
+        var int top;    // drawing top = ground y - lift
 
+        let top = y - lift;
         do Screen.setColor(true);
+        if (lift > 0) {
+            do Screen.drawLine(x + 5, y + height - 1, x + 18, y + height - 1);
+        }
         let cx = x + 12;        // width/2 = 12 (precomputed)
-        let headCy = y + 9;
+        let headCy = top + 9;
 
         // Head (circle) and cap (small filled rectangle on top of the head).
         do Screen.drawCircle(cx, headCy, 7);
-        do Screen.drawRectangle(cx - 8, y + 1, cx + 8, y + 4);   // cap brim
+        do Screen.drawRectangle(cx - 8, top + 1, cx + 8, top + 4);   // cap brim
 
         // Body (torso rectangle).
-        do Screen.drawRectangle(x + 4, y + 17, x + 19, y + 32);
+        do Screen.drawRectangle(x + 4, top + 17, x + 19, top + 32);
 
         // Backpack detail (small rectangle behind the torso, left side).
-        do Screen.drawRectangle(x, y + 19, x + 3, y + 29);
+        do Screen.drawRectangle(x, top + 19, x + 3, top + 29);
 
         // Arms (lines from shoulders down the sides).
-        do Screen.drawLine(x + 4, y + 18, x, y + 28);
-        do Screen.drawLine(x + 19, y + 18, x + 23, y + 28);
+        do Screen.drawLine(x + 4, top + 18, x, top + 28);
+        do Screen.drawLine(x + 19, top + 18, x + 23, top + 28);
 
         // Legs (two lines from the hips to the feet).
-        do Screen.drawLine(x + 8, y + 32, x + 8, y + 39);
-        do Screen.drawLine(x + 15, y + 32, x + 15, y + 39);
+        do Screen.drawLine(x + 8, top + 32, x + 8, top + 39);
+        do Screen.drawLine(x + 15, top + 32, x + 15, top + 39);
         return;
     }
 
-    /** Erases the player by filling its whole bounding box with black.
-     *  Decoupled from draw(): sets black, fills the box, restores white.
+    /** Erases the player by filling its box (plus the lift) with white.
+     *  Decoupled from draw(): sets white, fills the box, restores black.
      *  Returns: void. */
     method void erase() {
         do Screen.setColor(false);
-        do Screen.drawRectangle(x, y, x + width, y + height);
+        do Screen.drawRectangle(x, y - lift, x + width, y + height);
         do Screen.setColor(true);
         return;
     }

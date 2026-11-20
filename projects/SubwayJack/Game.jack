@@ -11,7 +11,10 @@ class Game {
     field int WAIT_MIN;            // minimum wait (speed cap)
     field int fieldTop;             // play field top y
     field int fieldBottom;          // play field bottom y
-    field int spawnGap;             // min vertical gap between obstacles
+    field int clearance;            // free track (px) kept above each obstacle
+    field int JUMP_PX;              // track distance (px) covered by one jump
+    field int JUMP_LIFT;            // sprite lift (px) while airborne
+    field int JUMP_COOL;            // ground frames required between jumps
 
     // --- State machine ---
     field int state;                // 0=START, 1=PLAYING, 2=GAMEOVER
@@ -28,6 +31,8 @@ class Game {
     field int K_R;      // 82
     field int K_A;      // 65
     field int K_D;      // 68
+    field int K_UP;     // 131
+    field int K_W;      // 87
 
     // --- Runtime state ---
     field int score;                // points (dodged obstacles)
@@ -41,6 +46,8 @@ class Game {
     field boolean exit;             // true -> leave the main loop
     field int seedCtr;              // increments on START to seed the Rng
     field boolean won;              // true if the player reached level 10
+    field int jumpTimer;            // airborne frames left (0 = on the ground)
+    field int jumpCool;             // frames left before another jump is allowed
 
     /** Builds the whole game world ONCE: board, player, hud and the obstacle
      *  pool. Initializes constants and resets the runtime state.
@@ -54,7 +61,13 @@ class Game {
         let WAIT_MIN = 16;
         let fieldTop = 0;
         let fieldBottom = 255;
-        let spawnGap = 70;          // vertical spacing so a lane stays open
+        // Free track above every obstacle: player height (40) + 1 px of AABB
+        // contact + 48 px of reaction window. With it only one obstacle at a
+        // time overlaps the player's rows, so one lane change always escapes.
+        let clearance = 89;
+        let JUMP_PX = 80;           // clears a cone (26 px) + the player (41 px)
+        let JUMP_LIFT = 8;
+        let JUMP_COOL = 10;
 
         let ST_START = 0;
         let ST_PLAYING = 1;
@@ -68,6 +81,8 @@ class Game {
         let K_R = 82;
         let K_A = 65;
         let K_D = 68;
+        let K_UP = 131;
+        let K_W = 87;
 
         // Owned objects (allocated once).
         let board = Board.new();
@@ -78,8 +93,8 @@ class Game {
         let obstacles = Array.new(obstacleCount);
         let i = 0;
         while (i < obstacleCount) {
-            // Initial off-screen positions (above the field), varied types.
-            let o = Obstacle.new(i - (3 * (i / 3)), 0 - (spawnGap * (i + 1)), i - (3 * (i / 3)), fieldTop, fieldBottom);
+            // Lane, type and position are set by resetState().
+            let o = Obstacle.new(0, 0, 0, fieldTop, fieldBottom);
             let obstacles[i] = o;
             let i = i + 1;
         }
@@ -94,7 +109,7 @@ class Game {
     /** Resets all runtime variables to their initial values WITHOUT allocating
      *  anything. Repositions player and obstacles. Returns: void. */
     method void resetState() {
-        var int i;
+        var int i, lane, top;
         var Obstacle o;
 
         let score = 0;
@@ -106,15 +121,20 @@ class Game {
         let blinkCtr = 0;
         let playerShown = false;
         let won = false;
+        let jumpTimer = 0;
+        let jumpCool = 0;
 
         do player.reset();
 
-        // Spread obstacles above the field, each in a lane, spaced by spawnGap.
+        // Stack the obstacles above the field: lane = type = i mod 3, each one
+        // placed (its height + clearance) above the previous top.
+        let top = 0;
         let i = 0;
         while (i < obstacleCount) {
             let o = obstacles[i];
-            // lane = i mod 3 (manual modulo), start type = lane for variety.
-            do o.reset(i - (3 * (i / 3)), 0 - (spawnGap * (i + 1)), i - (3 * (i / 3)));
+            let lane = i - (3 * (i / 3));          // manual modulo
+            let top = top - (Obstacle.heightFor(lane) + clearance);
+            do o.reset(lane, top, lane);
             let i = i + 1;
         }
 
@@ -198,6 +218,7 @@ class Game {
         let prevKey = key;
 
         do updateObstacles();
+        do handleJump();
         do handleInvulnerability();
         do hud.draw();
 
@@ -233,6 +254,10 @@ class Game {
         if (((key = K_RIGHT) | (key = K_D)) & (~((prevKey = K_RIGHT) | (prevKey = K_D)))) {
             do movePlayerRight();
         }
+        // Jump edge: up arrow or 'W'.
+        if (((key = K_UP) | (key = K_W)) & (~((prevKey = K_UP) | (prevKey = K_W)))) {
+            do startJump();
+        }
         return;
     }
 
@@ -248,6 +273,44 @@ class Game {
     method void movePlayerRight() {
         if (~playerShown) { do player.draw(); let playerShown = true; }
         do player.moveRight();
+        return;
+    }
+
+    /** Starts a jump if the player is on the ground and the cooldown is over.
+     *  Airborne time = JUMP_PX / speed frames, so a jump covers the same track
+     *  distance at every level. Returns: void. */
+    method void startJump() {
+        if ((jumpTimer = 0) & (jumpCool = 0)) {
+            let jumpTimer = (JUMP_PX / speed) + 1;
+            do setPlayerLift(JUMP_LIFT);
+        }
+        return;
+    }
+
+    /** Advances the jump. While airborne the sprite is repainted on top of the
+     *  obstacles it flies over; on landing it goes back to the ground and the
+     *  cooldown starts. Returns: void. */
+    method void handleJump() {
+        if (jumpCool > 0) { let jumpCool = jumpCool - 1; }
+        if (jumpTimer > 0) {
+            let jumpTimer = jumpTimer - 1;
+            if (jumpTimer = 0) {
+                do setPlayerLift(0);
+                let jumpCool = JUMP_COOL;
+            } else {
+                if (playerShown) { do player.draw(); }
+            }
+        }
+        return;
+    }
+
+    /** Changes the sprite lift, repainting only when the sprite is visible
+     *  (the invulnerability blink may hide it). Params: l = lift in px.
+     *  Returns: void. */
+    method void setPlayerLift(int l) {
+        if (playerShown) { do player.erase(); }
+        do player.setLift(l);
+        if (playerShown) { do player.draw(); }
         return;
     }
 
@@ -268,8 +331,9 @@ class Game {
                 do addScore();
                 do recycleObstacle(o);
             } else {
-                // Collision only while not invulnerable.
-                if (invuln = 0) {
+                // Collision only while not invulnerable; in the air only a
+                // train (type 1) is tall enough to hit the player.
+                if ((invuln = 0) & ((jumpTimer = 0) | (o.getType() = 1))) {
                     if (collides(o)) {
                         do onHit(o);
                     }
@@ -374,16 +438,19 @@ class Game {
         var int newType;
         var int newY;
         var int topMost;
+        var int h;
 
         let newLane = Rng.nextInt(3);     // 0..2
         let newType = Rng.nextInt(3);     // 0..2
+        let h = Obstacle.heightFor(newType);
         let topMost = highestTop();        // smallest y among obstacles
-        // Candidate: spawnGap above the current highest obstacle. Never spawn
-        // on-screen; force it clearly above the top edge (negative y) so it
-        // scrolls in, and so at most two lanes are ever blocked at one height.
-        let newY = topMost - spawnGap;
-        if (newY > (0 - 60)) {
-            let newY = 0 - 60;
+        // Place it (its height + clearance) above the current highest obstacle,
+        // so it reaches the player's rows only after the previous one has left
+        // them plus the reaction window. Never spawn on-screen: at least fully
+        // above the top edge (negative y) so it scrolls in.
+        let newY = topMost - (h + clearance);
+        if (newY > (0 - h - 1)) {
+            let newY = 0 - h - 1;
         }
         do o.recycle(newLane, newY, newType);
         return;
@@ -454,6 +521,8 @@ class Game {
         do Hud.printText("Esquiva los obstaculos");
         do Output.moveCursor(13, 28);
         do Hud.printText("Flechas o A/D: mover");
+        do Output.moveCursor(14, 28);
+        do Hud.printText("Arriba o W: saltar");
         do Output.moveCursor(16, 27);
         do Hud.printText("Presiona ESPACIO");
         do Output.moveCursor(17, 30);

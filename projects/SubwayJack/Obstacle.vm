@@ -33,8 +33,6 @@ goto IF_FALSE0
 label IF_TRUE0
 push constant 48
 pop this 2
-push constant 60
-pop this 3
 goto IF_END0
 label IF_FALSE0
 push this 5
@@ -45,16 +43,15 @@ goto IF_FALSE1
 label IF_TRUE1
 push constant 24
 pop this 2
-push constant 26
-pop this 3
 goto IF_END1
 label IF_FALSE1
 push constant 56
 pop this 2
-push constant 18
-pop this 3
 label IF_END1
 label IF_END0
+push this 5
+call Obstacle.heightFor 1
+pop this 3
 push pointer 0
 push argument 1
 call Obstacle.laneCenter 2
@@ -64,6 +61,27 @@ call Math.divide 2
 sub
 pop this 0
 push constant 0
+return
+function Obstacle.heightFor 0
+push argument 0
+push constant 1
+eq
+if-goto IF_TRUE0
+goto IF_FALSE0
+label IF_TRUE0
+push constant 60
+return
+label IF_FALSE0
+push argument 0
+push constant 2
+eq
+if-goto IF_TRUE1
+goto IF_FALSE1
+label IF_TRUE1
+push constant 26
+return
+label IF_FALSE1
+push constant 18
 return
 function Obstacle.laneCenter 0
 push argument 0
@@ -603,6 +621,11 @@ function Obstacle.getLane 0
 push argument 0
 pop pointer 0
 push this 4
+return
+function Obstacle.getType 0
+push argument 0
+pop pointer 0
+push this 5
 return
 function Obstacle.isScored 0
 push argument 0

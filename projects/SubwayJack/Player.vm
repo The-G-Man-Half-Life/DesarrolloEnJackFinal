@@ -1,5 +1,5 @@
 function Player.new 0
-push constant 5
+push constant 6
 call Memory.alloc 1
 pop pointer 0
 push argument 0
@@ -18,6 +18,8 @@ push constant 250
 push this 3
 sub
 pop this 1
+push constant 0
+pop this 5
 push pointer 0
 return
 function Player.laneCenter 0
@@ -134,19 +136,57 @@ push this 3
 sub
 pop this 1
 push constant 0
+pop this 5
+push constant 0
 return
-function Player.draw 2
+function Player.setLift 0
 push argument 0
 pop pointer 0
+push argument 1
+pop this 5
+push constant 0
+return
+function Player.draw 3
+push argument 0
+pop pointer 0
+push this 1
+push this 5
+sub
+pop local 2
 push constant 0
 not
 call Screen.setColor 1
 pop temp 0
+push this 5
+push constant 0
+gt
+if-goto IF_TRUE0
+goto IF_FALSE0
+label IF_TRUE0
+push this 0
+push constant 5
+add
+push this 1
+push this 3
+add
+push constant 1
+sub
+push this 0
+push constant 18
+add
+push this 1
+push this 3
+add
+push constant 1
+sub
+call Screen.drawLine 4
+pop temp 0
+label IF_FALSE0
 push this 0
 push constant 12
 add
 pop local 0
-push this 1
+push local 2
 push constant 9
 add
 pop local 1
@@ -158,13 +198,13 @@ pop temp 0
 push local 0
 push constant 8
 sub
-push this 1
+push local 2
 push constant 1
 add
 push local 0
 push constant 8
 add
-push this 1
+push local 2
 push constant 4
 add
 call Screen.drawRectangle 4
@@ -172,25 +212,25 @@ pop temp 0
 push this 0
 push constant 4
 add
-push this 1
+push local 2
 push constant 17
 add
 push this 0
 push constant 19
 add
-push this 1
+push local 2
 push constant 32
 add
 call Screen.drawRectangle 4
 pop temp 0
 push this 0
-push this 1
+push local 2
 push constant 19
 add
 push this 0
 push constant 3
 add
-push this 1
+push local 2
 push constant 29
 add
 call Screen.drawRectangle 4
@@ -198,11 +238,11 @@ pop temp 0
 push this 0
 push constant 4
 add
-push this 1
+push local 2
 push constant 18
 add
 push this 0
-push this 1
+push local 2
 push constant 28
 add
 call Screen.drawLine 4
@@ -210,13 +250,13 @@ pop temp 0
 push this 0
 push constant 19
 add
-push this 1
+push local 2
 push constant 18
 add
 push this 0
 push constant 23
 add
-push this 1
+push local 2
 push constant 28
 add
 call Screen.drawLine 4
@@ -224,13 +264,13 @@ pop temp 0
 push this 0
 push constant 8
 add
-push this 1
+push local 2
 push constant 32
 add
 push this 0
 push constant 8
 add
-push this 1
+push local 2
 push constant 39
 add
 call Screen.drawLine 4
@@ -238,13 +278,13 @@ pop temp 0
 push this 0
 push constant 15
 add
-push this 1
+push local 2
 push constant 32
 add
 push this 0
 push constant 15
 add
-push this 1
+push local 2
 push constant 39
 add
 call Screen.drawLine 4
@@ -259,6 +299,8 @@ call Screen.setColor 1
 pop temp 0
 push this 0
 push this 1
+push this 5
+sub
 push this 0
 push this 2
 add
