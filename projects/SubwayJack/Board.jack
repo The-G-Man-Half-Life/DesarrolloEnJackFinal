@@ -138,33 +138,33 @@ class Board {
 
         // --- Left panel static title (columns 1..14) ---
         do Output.moveCursor(1, 4);
-        do Output.printString("SUBWAY");
+        do Hud.printText("SUBWAY");
         do Output.moveCursor(2, 5);
-        do Output.printString("JACK");
+        do Hud.printText("JACK");
         // Stats labels/numbers are drawn by the Hud (rows 5,7,9).
 
         // --- Right panel static controls legend (columns 48..62) ---
         do Output.moveCursor(1, 50);
-        do Output.printString("CONTROLES");
+        do Hud.printText("CONTROLES");
         do Output.moveCursor(3, 49);
-        do Output.printString("A/D o");
+        do Hud.printText("A/D o");
         do Output.moveCursor(4, 49);
-        do Output.printString("flechas:");
+        do Hud.printText("flechas:");
         do Output.moveCursor(5, 49);
-        do Output.printString("mover");
+        do Hud.printText("mover");
         do Output.moveCursor(7, 49);
-        do Output.printString("ESPACIO:");
+        do Hud.printText("ESPACIO:");
         do Output.moveCursor(8, 49);
-        do Output.printString("iniciar");
+        do Hud.printText("iniciar");
         do Output.moveCursor(10, 49);
-        do Output.printString("R: reinic");
+        do Hud.printText("R: reinic");
         do Output.moveCursor(12, 49);
-        do Output.printString("ESC: salir");
+        do Hud.printText("ESC: salir");
         return;
     }
 
     /** Clears the INTERIOR of the play field (everything strictly inside the
-     *  thick side borders), used on restart to wipe sprites without touching
+     *  thick side borders), used on GAME OVER to wipe sprites without touching
      *  the frame, dividers or HUD panels. Redraws the dashed dividers and
      *  posts afterwards so the track decoration stays intact.
      *  Returns: void. */

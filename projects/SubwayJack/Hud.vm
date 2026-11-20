@@ -56,7 +56,7 @@ push constant 58
 call String.appendChar 2
 push constant 32
 call String.appendChar 2
-call Output.printString 1
+call Hud.printText 1
 pop temp 0
 push this 10
 push constant 1
@@ -78,7 +78,7 @@ push constant 58
 call String.appendChar 2
 push constant 32
 call String.appendChar 2
-call Output.printString 1
+call Hud.printText 1
 pop temp 0
 push this 11
 push constant 1
@@ -100,7 +100,7 @@ push constant 58
 call String.appendChar 2
 push constant 32
 call String.appendChar 2
-call Output.printString 1
+call Hud.printText 1
 pop temp 0
 push constant 0
 return
@@ -175,27 +175,30 @@ pop this 5
 label IF_FALSE2
 push constant 0
 return
-function Hud.clearNumber 0
+function Hud.clearNumber 1
 push argument 0
 pop pointer 0
 push argument 1
 push argument 2
 call Output.moveCursor 2
 pop temp 0
+push constant 0
+pop local 0
+label WHILE_EXP0
+push local 0
 push constant 5
-call String.new 1
+lt
+not
+if-goto WHILE_END0
 push constant 32
-call String.appendChar 2
-push constant 32
-call String.appendChar 2
-push constant 32
-call String.appendChar 2
-push constant 32
-call String.appendChar 2
-push constant 32
-call String.appendChar 2
-call Output.printString 1
+call Output.printChar 1
 pop temp 0
+push local 0
+push constant 1
+add
+pop local 0
+goto WHILE_EXP0
+label WHILE_END0
 push constant 0
 return
 function Hud.forceRedraw 0
@@ -237,6 +240,15 @@ function Hud.getLevel 0
 push argument 0
 pop pointer 0
 push this 2
+return
+function Hud.printText 0
+push argument 0
+call Output.printString 1
+pop temp 0
+push argument 0
+call String.dispose 1
+pop temp 0
+push constant 0
 return
 function Hud.dispose 0
 push argument 0

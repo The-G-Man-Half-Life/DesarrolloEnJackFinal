@@ -1,0 +1,9 @@
+# Finales de línea: LF dentro del repositorio; cada sistema los adapta al hacer checkout.
+* text=auto
+# Los scripts conservan el final de línea que exige su intérprete.
+*.sh text eol=lf
+*.bat text eol=crlf
+# Binarios de las herramientas de Nand2Tetris.
+*.jar binary
+*.class binary
+*.gif binary

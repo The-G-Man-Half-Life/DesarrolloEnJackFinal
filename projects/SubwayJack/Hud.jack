@@ -44,11 +44,11 @@ class Hud {
      *  Returns: void. */
     method void drawLabels() {
         do Output.moveCursor(scoreRow, 1);
-        do Output.printString("PUNTOS: ");
+        do Hud.printText("PUNTOS: ");
         do Output.moveCursor(livesRow, 1);
-        do Output.printString("VIDAS: ");
+        do Hud.printText("VIDAS: ");
         do Output.moveCursor(levelRow, 1);
-        do Output.printString("NIVEL: ");
+        do Hud.printText("NIVEL: ");
         return;
     }
 
@@ -80,8 +80,14 @@ class Hud {
      *  previously longer number leaves no leftover digits.
      *  Params: row, col = top-left cell of the number field. Returns: void. */
     method void clearNumber(int row, int col) {
+        var int i;
+
         do Output.moveCursor(row, col);
-        do Output.printString("     ");   // five spaces is enough for our range
+        let i = 0;
+        while (i < 5) {             // five blanks cover our number range
+            do Output.printChar(32);  // printChar allocates nothing
+            let i = i + 1;
+        }
         return;
     }
 
@@ -109,6 +115,16 @@ class Hud {
     method int getLives() { return lives; }
     /** Getter: current level. */
     method int getLevel() { return level; }
+
+    /** Prints a string constant and frees it. In Jack every string literal
+     *  allocates a new String each time it runs, so disposing it right after
+     *  printing keeps screen repaints from leaking heap.
+     *  Params: s = text to print (consumed). Returns: void. */
+    function void printText(String s) {
+        do Output.printString(s);
+        do s.dispose();
+        return;
+    }
 
     /** Releases the Hud. Owns no sub-objects, frees only itself.
      *  Returns: void. */
