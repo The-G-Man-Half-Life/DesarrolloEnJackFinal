@@ -1,5 +1,13 @@
 # Subway Jack: Juego completo (Hito 2 / Proyecto Final)
 
+## Video - Sustentación
+
+[![Subway Jack: sustentación final](https://img.youtube.com/vi/5ne6TOmrlq8/hqdefault.jpg)](https://youtu.be/5ne6TOmrlq8)
+
+https://youtu.be/5ne6TOmrlq8
+
+---
+
 Videojuego retro 2D estilo *Subway Surfers* con **vista cenital** y **3 carriles verticales**, implementado en el lenguaje **Jack** del ecosistema **Nand2Tetris** (plataforma Hack).
 
 El **Hito 2** convierte el renderizado estático del Hito 1 en un **juego completo y jugable**: máquina de estados, bucle principal no bloqueante, movimiento y salto del jugador, obstáculos que caen y se reciclan, colisiones AABB, puntaje, vidas, niveles, reinicio y salida controlada. Todos los objetos se crean una sola vez y se liberan con `dispose()`; el heap se mantiene estable entre partidas (ver [Pruebas de control](#pruebas-de-control)).
@@ -7,7 +15,7 @@ El **Hito 2** convierte el renderizado estático del Hito 1 en un **juego comple
 | Enlace | URL |
 |--------|-----|
 | Repositorio | https://github.com/The-G-Man-Half-Life/DesarrolloEnJackFinal |
-| Video de sustentación | POR CONFIRMAR |
+| Video de sustentación | https://youtu.be/5ne6TOmrlq8 |
 
 ---
 
